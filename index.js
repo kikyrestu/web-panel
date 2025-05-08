@@ -1,7 +1,8 @@
 require('dotenv').config();
 const { Telegraf, Scenes, session, Markup } = require('telegraf');
-const mongoose = require('./db');
+const { sequelize } = require('./db');
 const settingsService = require('./services/settings');
+const { syncModels } = require('./models'); // Import fungsi syncModels dari models/index.js
 
 // Import scenes
 const { vpsStage } = require('./scenes/vps');
@@ -13,6 +14,11 @@ const { accountStage } = require('./scenes/account');
 // Fungsi untuk menginisialisasi dan menjalankan bot
 async function startBot() {
   try {
+    // Sinkronisasi model dengan database terlebih dahulu
+    console.log('Menyinkronkan model database...');
+    await syncModels();
+    console.log('Model database berhasil disinkronkan');
+    
     // Inisialisasi pengaturan dari env ke database
     await settingsService.initSettings();
     
