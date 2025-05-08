@@ -10,7 +10,7 @@ router.post('/login', authController.processLogin);
 // Logout route (protected)
 router.get('/logout', isAdmin, authController.logout);
 
-// Password reset - menggunakan fungsi fallback karena fungsi belum diimplementasi
+// Password reset - menggunakan fungsi fallback langsung
 router.get('/forgot-password', function(req, res) { res.send('Forgot password page under construction'); });
 router.post('/forgot-password', function(req, res) { res.send('Forgot password feature under construction'); });
 router.get('/reset-password/:token', function(req, res) { res.send('Reset password page under construction'); });
