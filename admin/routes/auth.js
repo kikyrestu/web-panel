@@ -1,19 +1,19 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
-const { isAdmin } = require('../middlewares/auth');
+const { checkAuth, checkGuest } = require('../middlewares/auth');
 
 // Login routes
 router.get('/login', authController.showLoginForm);
 router.post('/login', authController.processLogin);
 
 // Logout route (protected)
-router.get('/logout', isAdmin, authController.logout);
+router.get('/logout', checkAuth, authController.logout);
 
 // Profile routes (protected)
-router.get('/profile', isAdmin, authController.showProfile);
-router.post('/profile/update', isAdmin, authController.updateProfile);
-router.post('/profile/change-password', isAdmin, authController.changePassword);
+router.get('/profile', checkAuth, authController.showProfile);
+router.post('/profile/update', checkAuth, authController.updateProfile);
+router.post('/profile/change-password', checkAuth, authController.changePassword);
 
 // Password reset - menggunakan arrow function yang valid
 router.get('/forgot-password', (req, res) => {
