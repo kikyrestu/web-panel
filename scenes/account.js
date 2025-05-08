@@ -358,15 +358,27 @@ accountTopupConfirmScene.on('photo', async (ctx) => {
       return ctx.scene.enter('account-info');
     }
     
-    // Di sini, dalam implementasi sebenarnya, admin akan memverifikasi dan memproses top up
-    // Untuk tujuan demo, kita langsung menambah saldo user
-    user.balance = parseFloat(user.balance || 0) + amount;
+    // Simpan informasi topup request di database (misalnya di model TopupRequest)
+    // Untuk sementara, kita bisa menyimpannya sebagai notes di user
+    const topupRequests = user.topupRequests || [];
+    topupRequests.push({
+      amount,
+      fileId,
+      status: 'pending',
+      requestedAt: new Date()
+    });
+    
+    user.topupRequests = topupRequests;
     await user.save();
     
+    // Kirim notifikasi ke admin (dalam kasus nyata, bisa kirim ke admin channel)
+    console.log(`[ADMIN] New topup request: User ${user.telegramId} (${user.username || user.firstName}) requested ${amount}`);
+    
     await ctx.reply(
-      '✅ *Top Up Berhasil*\n\n' +
-      `Saldo sebesar Rp ${amount.toLocaleString('id-ID')} telah ditambahkan ke akun Anda.\n\n` +
-      `Saldo Anda sekarang: Rp ${parseFloat(user.balance).toLocaleString('id-ID')}`,
+      '✅ *Bukti Pembayaran Diterima*\n\n' +
+      `Terima kasih telah mengirimkan bukti pembayaran untuk top up saldo sebesar Rp ${amount.toLocaleString('id-ID')}.\n\n` +
+      'Tim kami akan memverifikasi pembayaran Anda dan memproses top up saldo Anda sesegera mungkin. ' +
+      'Anda akan mendapatkan notifikasi ketika saldo Anda sudah ditambahkan.',
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
@@ -374,9 +386,6 @@ accountTopupConfirmScene.on('photo', async (ctx) => {
         ])
       }
     );
-    
-    // Dalam implementasi sebenarnya, di sini akan mengirimkan notifikasi ke admin
-    console.log(`User ${user.telegramId} (${user.username || user.firstName}) top up ${amount}`);
     
   } catch (err) {
     console.error('Error pada accountTopupConfirmScene photo:', err);
@@ -405,15 +414,27 @@ accountTopupConfirmScene.on('document', async (ctx) => {
       return ctx.scene.enter('account-info');
     }
     
-    // Di sini, dalam implementasi sebenarnya, admin akan memverifikasi dan memproses top up
-    // Untuk tujuan demo, kita langsung menambah saldo user
-    user.balance = parseFloat(user.balance || 0) + amount;
+    // Simpan informasi topup request di database (misalnya di model TopupRequest)
+    // Untuk sementara, kita bisa menyimpannya sebagai notes di user
+    const topupRequests = user.topupRequests || [];
+    topupRequests.push({
+      amount,
+      fileId,
+      status: 'pending',
+      requestedAt: new Date()
+    });
+    
+    user.topupRequests = topupRequests;
     await user.save();
     
+    // Kirim notifikasi ke admin (dalam kasus nyata, bisa kirim ke admin channel)
+    console.log(`[ADMIN] New topup request: User ${user.telegramId} (${user.username || user.firstName}) requested ${amount} (document)`);
+    
     await ctx.reply(
-      '✅ *Top Up Berhasil*\n\n' +
-      `Saldo sebesar Rp ${amount.toLocaleString('id-ID')} telah ditambahkan ke akun Anda.\n\n` +
-      `Saldo Anda sekarang: Rp ${parseFloat(user.balance).toLocaleString('id-ID')}`,
+      '✅ *Bukti Pembayaran Diterima*\n\n' +
+      `Terima kasih telah mengirimkan bukti pembayaran untuk top up saldo sebesar Rp ${amount.toLocaleString('id-ID')}.\n\n` +
+      'Tim kami akan memverifikasi pembayaran Anda dan memproses top up saldo Anda sesegera mungkin. ' +
+      'Anda akan mendapatkan notifikasi ketika saldo Anda sudah ditambahkan.',
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
@@ -421,9 +442,6 @@ accountTopupConfirmScene.on('document', async (ctx) => {
         ])
       }
     );
-    
-    // Dalam implementasi sebenarnya, di sini akan mengirimkan notifikasi ke admin
-    console.log(`User ${user.telegramId} (${user.username || user.firstName}) top up ${amount} (document)`);
     
   } catch (err) {
     console.error('Error pada accountTopupConfirmScene document:', err);
