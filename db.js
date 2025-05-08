@@ -2,9 +2,9 @@ const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
 // Konfigurasi koneksi PostgreSQL dari environment variables
-const DB_NAME = process.env.DB_NAME || 'hosting_bot';
-const DB_USER = process.env.DB_USER || 'postgres';
-const DB_PASSWORD = process.env.DB_PASSWORD || 'password';
+const DB_NAME = process.env.DB_NAME || 'telebot_hostsel';
+const DB_USER = process.env.DB_USER || 'adminhostselbot';
+const DB_PASSWORD = process.env.DB_PASSWORD || 'Kikyrestu089$_!';
 const DB_HOST = process.env.DB_HOST || 'localhost';
 const DB_PORT = process.env.DB_PORT || 5432;
 const DB_DIALECT = process.env.DB_DIALECT || 'postgres';
