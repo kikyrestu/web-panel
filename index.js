@@ -2,7 +2,8 @@ require('dotenv').config();
 const { Telegraf, Scenes, session, Markup } = require('telegraf');
 const { sequelize } = require('./db');
 const settingsService = require('./services/settings');
-const { syncModels } = require('./models'); // Import fungsi syncModels dari models/index.js
+const { syncModels } = require('./models');
+const { runMigrations } = require('./migrations');
 
 // Import scenes
 const { vpsStage } = require('./scenes/vps');
@@ -14,10 +15,17 @@ const { accountStage } = require('./scenes/account');
 // Fungsi untuk menginisialisasi dan menjalankan bot
 async function startBot() {
   try {
-    // Sinkronisasi model dengan database terlebih dahulu
-    console.log('Menyinkronkan model database...');
-    await syncModels();
-    console.log('Model database berhasil disinkronkan');
+    // Jalankan migrasi otomatis terlebih dahulu
+    console.log('Menjalankan migrasi database otomatis...');
+    const migrationSuccess = await runMigrations();
+    
+    if (!migrationSuccess) {
+      console.error('Migrasi database gagal, aplikasi tidak dapat berjalan');
+      console.log('Pastikan user database memiliki permission yang cukup');
+      process.exit(1);
+    }
+    
+    console.log('Migrasi database berhasil');
     
     // Inisialisasi pengaturan dari env ke database
     await settingsService.initSettings();
