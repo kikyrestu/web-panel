@@ -10,11 +10,11 @@ router.post('/login', authController.processLogin);
 // Logout route (protected)
 router.get('/logout', isAdmin, authController.logout);
 
-// Password reset
-router.get('/forgot-password', authController.showForgotPasswordForm || function(req, res) { res.send('Page under construction'); });
-router.post('/forgot-password', authController.processForgotPassword || function(req, res) { res.send('Feature under construction'); });
-router.get('/reset-password/:token', authController.showResetPasswordForm || function(req, res) { res.send('Page under construction'); });
-router.post('/reset-password/:token', authController.processResetPassword || function(req, res) { res.send('Feature under construction'); });
+// Password reset - menggunakan fungsi fallback karena fungsi belum diimplementasi
+router.get('/forgot-password', function(req, res) { res.send('Forgot password page under construction'); });
+router.post('/forgot-password', function(req, res) { res.send('Forgot password feature under construction'); });
+router.get('/reset-password/:token', function(req, res) { res.send('Reset password page under construction'); });
+router.post('/reset-password/:token', function(req, res) { res.send('Reset password feature under construction'); });
 
 // Profile routes (protected)
 router.get('/profile', isAdmin, authController.showProfile);
