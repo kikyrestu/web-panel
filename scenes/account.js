@@ -1,6 +1,7 @@
 const { Scenes, Markup } = require('telegraf');
 const User = require('../models/User');
 const Order = require('../models/Order');
+const { Op } = require('sequelize');
 
 // Scene untuk informasi akun
 const accountInfoScene = new Scenes.BaseScene('account-info');
@@ -9,17 +10,18 @@ accountInfoScene.enter(async (ctx) => {
   try {
     // Cek user
     const telegramId = ctx.from.id;
-    let user = await User.findOne({ telegramId });
+    let user = await User.findOne({ where: { telegramId } });
     
     if (!user) {
-      user = new User({
+      user = await User.create({
         telegramId,
         username: ctx.from.username,
         firstName: ctx.from.first_name,
         lastName: ctx.from.last_name,
-        lastActivity: new Date()
+        lastActivity: new Date(),
+        registeredAt: new Date(),
+        balance: 0
       });
-      await user.save();
     } else {
       // Update last activity
       user.lastActivity = new Date();
@@ -27,13 +29,19 @@ accountInfoScene.enter(async (ctx) => {
     }
     
     // Hitung jumlah pesanan
-    const orders = await Order.find({ user: user._id });
+    const orders = await Order.findAll({ 
+      where: { 
+        userId: user.id 
+      }
+    });
+    
     const activeOrders = orders.filter(order => order.status === 'completed').length;
     const totalOrders = orders.length;
     
     // Ambil informasi kontak
-    const email = user.contact && user.contact.email ? user.contact.email : 'Belum diatur';
-    const phoneNumber = user.contact && user.contact.phoneNumber ? user.contact.phoneNumber : 'Belum diatur';
+    const contactDetails = user.contactDetails || {};
+    const email = contactDetails.email || 'Belum diatur';
+    const phoneNumber = contactDetails.phoneNumber || 'Belum diatur';
     
     // Format informasi akun
     const accountMessage = 
@@ -43,11 +51,11 @@ accountInfoScene.enter(async (ctx) => {
       `🔤 Username: ${user.username ? '@' + user.username : 'Tidak ada'}\n` +
       `📧 Email: ${email}\n` +
       `📱 Telepon: ${phoneNumber}\n` +
-      `💰 Saldo: Rp ${user.balance.toLocaleString('id-ID')}\n` +
+      `💰 Saldo: Rp ${parseFloat(user.balance || 0).toLocaleString('id-ID')}\n` +
       `📊 Total Pesanan: ${totalOrders}\n` +
       `🟢 Layanan Aktif: ${activeOrders}\n` +
-      `📅 Terdaftar: ${user.registeredAt.toLocaleDateString('id-ID')}\n` +
-      `📅 Aktivitas Terakhir: ${user.lastActivity.toLocaleDateString('id-ID')}`;
+      `📅 Terdaftar: ${new Date(user.registeredAt).toLocaleDateString('id-ID')}\n` +
+      `📅 Aktivitas Terakhir: ${new Date(user.lastActivity).toLocaleDateString('id-ID')}`;
     
     await ctx.reply(accountMessage, {
       parse_mode: 'Markdown',
@@ -123,7 +131,7 @@ accountEditEmailScene.on('text', async (ctx) => {
     
     // Update email
     const telegramId = ctx.from.id;
-    const user = await User.findOne({ telegramId });
+    const user = await User.findOne({ where: { telegramId } });
     
     if (!user) {
       await ctx.reply('Terjadi kesalahan. User tidak ditemukan.');
@@ -131,8 +139,9 @@ accountEditEmailScene.on('text', async (ctx) => {
     }
     
     // Update contact info
-    user.contact = {
-      ...user.contact,
+    const contactDetails = user.contactDetails || {};
+    user.contactDetails = {
+      ...contactDetails,
       email
     };
     
@@ -181,7 +190,7 @@ accountEditPhoneScene.on('text', async (ctx) => {
     
     // Update phone number
     const telegramId = ctx.from.id;
-    const user = await User.findOne({ telegramId });
+    const user = await User.findOne({ where: { telegramId } });
     
     if (!user) {
       await ctx.reply('Terjadi kesalahan. User tidak ditemukan.');
@@ -189,8 +198,9 @@ accountEditPhoneScene.on('text', async (ctx) => {
     }
     
     // Update contact info
-    user.contact = {
-      ...user.contact,
+    const contactDetails = user.contactDetails || {};
+    user.contactDetails = {
+      ...contactDetails,
       phoneNumber
     };
     
@@ -272,9 +282,6 @@ accountTopupScene.action('topup_custom', async (ctx) => {
     'Silakan ketik jumlah yang ingin Anda top up (minimal Rp 50.000):',
     { parse_mode: 'Markdown' }
   );
-  
-  // Beralih ke mode input teks
-  ctx.wizard.next();
 });
 
 // Handler untuk input nominal custom
@@ -342,9 +349,9 @@ accountTopupConfirmScene.on('photo', async (ctx) => {
     const photo = ctx.message.photo;
     const fileId = photo[photo.length - 1].file_id;
     
-    // Simpan bukti transfer di user data (dalam praktiknya, ini akan terhubung ke admin dashboard)
+    // Simpan bukti transfer di user data
     const telegramId = ctx.from.id;
-    const user = await User.findOne({ telegramId });
+    const user = await User.findOne({ where: { telegramId } });
     
     if (!user) {
       await ctx.reply('Terjadi kesalahan. User tidak ditemukan.');
@@ -353,13 +360,13 @@ accountTopupConfirmScene.on('photo', async (ctx) => {
     
     // Di sini, dalam implementasi sebenarnya, admin akan memverifikasi dan memproses top up
     // Untuk tujuan demo, kita langsung menambah saldo user
-    user.balance += amount;
+    user.balance = parseFloat(user.balance || 0) + amount;
     await user.save();
     
     await ctx.reply(
       '✅ *Top Up Berhasil*\n\n' +
       `Saldo sebesar Rp ${amount.toLocaleString('id-ID')} telah ditambahkan ke akun Anda.\n\n` +
-      `Saldo Anda sekarang: Rp ${user.balance.toLocaleString('id-ID')}`,
+      `Saldo Anda sekarang: Rp ${parseFloat(user.balance).toLocaleString('id-ID')}`,
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
@@ -389,9 +396,9 @@ accountTopupConfirmScene.on('document', async (ctx) => {
     const amount = ctx.session.topupAmount;
     const fileId = ctx.message.document.file_id;
     
-    // Simpan bukti transfer di user data (dalam praktiknya, ini akan terhubung ke admin dashboard)
+    // Simpan bukti transfer di user data
     const telegramId = ctx.from.id;
-    const user = await User.findOne({ telegramId });
+    const user = await User.findOne({ where: { telegramId } });
     
     if (!user) {
       await ctx.reply('Terjadi kesalahan. User tidak ditemukan.');
@@ -400,13 +407,13 @@ accountTopupConfirmScene.on('document', async (ctx) => {
     
     // Di sini, dalam implementasi sebenarnya, admin akan memverifikasi dan memproses top up
     // Untuk tujuan demo, kita langsung menambah saldo user
-    user.balance += amount;
+    user.balance = parseFloat(user.balance || 0) + amount;
     await user.save();
     
     await ctx.reply(
       '✅ *Top Up Berhasil*\n\n' +
       `Saldo sebesar Rp ${amount.toLocaleString('id-ID')} telah ditambahkan ke akun Anda.\n\n` +
-      `Saldo Anda sekarang: Rp ${user.balance.toLocaleString('id-ID')}`,
+      `Saldo Anda sekarang: Rp ${parseFloat(user.balance).toLocaleString('id-ID')}`,
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([

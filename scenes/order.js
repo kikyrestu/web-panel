@@ -1,7 +1,7 @@
 const { Scenes, Markup } = require('telegraf');
 const Order = require('../models/Order');
 const User = require('../models/User');
-const mongoose = require('mongoose');
+const { Op } = require('sequelize');
 
 // Scene untuk menampilkan daftar pesanan
 const orderListScene = new Scenes.BaseScene('order-list');
@@ -10,7 +10,7 @@ orderListScene.enter(async (ctx) => {
   try {
     // Cek user
     const telegramId = ctx.from.id;
-    const user = await User.findOne({ telegramId });
+    const user = await User.findOne({ where: { telegramId } });
     
     if (!user) {
       await ctx.reply('Anda belum terdaftar. Silakan gunakan salah satu layanan kami untuk mendaftar.');
@@ -22,7 +22,11 @@ orderListScene.enter(async (ctx) => {
     await user.save();
     
     // Ambil pesanan user
-    const orders = await Order.find({ user: user._id }).sort('-createdAt').limit(10);
+    const orders = await Order.findAll({ 
+      where: { userId: user.id },
+      order: [['createdAt', 'DESC']],
+      limit: 10 
+    });
     
     if (orders.length === 0) {
       await ctx.reply(
@@ -77,7 +81,7 @@ orderListScene.enter(async (ctx) => {
       const serviceName = order.serviceName || order.domainName || 'Unnamed service';
       
       // Format tanggal
-      const orderDate = order.createdAt.toLocaleDateString('id-ID');
+      const orderDate = new Date(order.createdAt).toLocaleDateString('id-ID');
       
       // Format deskripsi pesanan
       let orderDescription = '';
@@ -119,10 +123,10 @@ orderListScene.enter(async (ctx) => {
       }
       
       const message = 
-        `📌 *Pesanan #${order._id.toString().slice(-6).toUpperCase()}*\n` +
+        `📌 *Pesanan #${order.id.toString().padStart(6, '0').toUpperCase()}*\n` +
         `${orderDescription}\n` +
         `${statusEmoji} Status: ${statusText}\n` +
-        `💰 Total: Rp ${order.amount.toLocaleString('id-ID')}\n` +
+        `💰 Total: Rp ${parseFloat(order.amount).toLocaleString('id-ID')}\n` +
         `📅 Tanggal: ${orderDate}\n`;
       
       // Tombol yang berbeda berdasarkan status pesanan
@@ -130,28 +134,28 @@ orderListScene.enter(async (ctx) => {
       
       if (order.status === 'pending') {
         buttons = [
-          Markup.button.callback('💳 Konfirmasi Pembayaran', `confirm_payment_${order._id}`),
-          Markup.button.callback('❌ Batalkan', `cancel_order_${order._id}`)
+          Markup.button.callback('💳 Konfirmasi Pembayaran', `confirm_payment_${order.id}`),
+          Markup.button.callback('❌ Batalkan', `cancel_order_${order.id}`)
         ];
       } else if (order.status === 'completed' && order.orderType === 'VPS') {
         buttons = [
-          Markup.button.callback('🔄 Restart Server', `restart_server_${order._id}`),
-          Markup.button.callback('🔑 Reset Password', `reset_password_${order._id}`),
-          Markup.button.callback('📋 Detail', `order_detail_${order._id}`)
+          Markup.button.callback('🔄 Restart Server', `restart_server_${order.id}`),
+          Markup.button.callback('🔑 Reset Password', `reset_password_${order.id}`),
+          Markup.button.callback('📋 Detail', `order_detail_${order.id}`)
         ];
       } else if (order.status === 'completed' && order.orderType === 'WebHosting') {
         buttons = [
-          Markup.button.callback('🌐 cPanel', `cpanel_${order._id}`),
-          Markup.button.callback('📋 Detail', `order_detail_${order._id}`)
+          Markup.button.callback('🌐 cPanel', `cpanel_${order.id}`),
+          Markup.button.callback('📋 Detail', `order_detail_${order.id}`)
         ];
       } else if (order.status === 'completed' && order.orderType === 'GameHosting') {
         buttons = [
-          Markup.button.callback('🎮 Control Panel', `game_panel_${order._id}`),
-          Markup.button.callback('📋 Detail', `order_detail_${order._id}`)
+          Markup.button.callback('🎮 Control Panel', `game_panel_${order.id}`),
+          Markup.button.callback('📋 Detail', `order_detail_${order.id}`)
         ];
       } else {
         buttons = [
-          Markup.button.callback('📋 Detail', `order_detail_${order._id}`)
+          Markup.button.callback('📋 Detail', `order_detail_${order.id}`)
         ];
       }
       
@@ -192,14 +196,8 @@ orderListScene.action(/cancel_order_(.+)/, async (ctx) => {
   try {
     const orderId = ctx.match[1];
     
-    // Validasi ObjectId
-    if (!mongoose.Types.ObjectId.isValid(orderId)) {
-      await ctx.answerCbQuery('ID pesanan tidak valid');
-      return;
-    }
-    
     // Update status pesanan
-    const order = await Order.findById(orderId);
+    const order = await Order.findByPk(orderId);
     
     if (!order) {
       await ctx.answerCbQuery('Pesanan tidak ditemukan');
@@ -233,14 +231,10 @@ orderListScene.action(/order_detail_(.+)/, async (ctx) => {
   try {
     const orderId = ctx.match[1];
     
-    // Validasi ObjectId
-    if (!mongoose.Types.ObjectId.isValid(orderId)) {
-      await ctx.answerCbQuery('ID pesanan tidak valid');
-      return;
-    }
-    
     // Ambil detail pesanan
-    const order = await Order.findById(orderId).populate('user');
+    const order = await Order.findByPk(orderId, {
+      include: [{ model: User, as: 'user' }]
+    });
     
     if (!order) {
       await ctx.answerCbQuery('Pesanan tidak ditemukan');
@@ -250,10 +244,10 @@ orderListScene.action(/order_detail_(.+)/, async (ctx) => {
     await ctx.answerCbQuery();
     
     // Format tanggal
-    const orderDate = order.createdAt.toLocaleDateString('id-ID') + ' ' + order.createdAt.toLocaleTimeString('id-ID');
-    const dueDate = order.dueDate ? order.dueDate.toLocaleDateString('id-ID') + ' ' + order.dueDate.toLocaleTimeString('id-ID') : 'N/A';
-    const startDate = order.startDate ? order.startDate.toLocaleDateString('id-ID') : 'N/A';
-    const endDate = order.endDate ? order.endDate.toLocaleDateString('id-ID') : 'N/A';
+    const orderDate = new Date(order.createdAt).toLocaleDateString('id-ID') + ' ' + new Date(order.createdAt).toLocaleTimeString('id-ID');
+    const dueDate = order.dueDate ? new Date(order.dueDate).toLocaleDateString('id-ID') + ' ' + new Date(order.dueDate).toLocaleTimeString('id-ID') : 'N/A';
+    const startDate = order.startDate ? new Date(order.startDate).toLocaleDateString('id-ID') : 'N/A';
+    const endDate = order.endDate ? new Date(order.endDate).toLocaleDateString('id-ID') : 'N/A';
     
     // Format status
     let statusText = '';
@@ -296,7 +290,7 @@ orderListScene.action(/order_detail_(.+)/, async (ctx) => {
         paymentMethodText = 'Saldo Akun';
         break;
       default:
-        paymentMethodText = order.paymentMethod;
+        paymentMethodText = order.paymentMethod || 'N/A';
     }
     
     // Format detail server jika ada
@@ -343,17 +337,18 @@ orderListScene.action(/order_detail_(.+)/, async (ctx) => {
       }
       
       if (order.paymentDetails.paidAmount) {
-        paymentDetails += `\nJumlah: Rp ${order.paymentDetails.paidAmount.toLocaleString('id-ID')}`;
+        paymentDetails += `\nJumlah: Rp ${parseFloat(order.paymentDetails.paidAmount).toLocaleString('id-ID')}`;
       }
       
       if (order.paymentDetails.paidAt) {
-        paymentDetails += `\nTanggal: ${order.paymentDetails.paidAt.toLocaleDateString('id-ID')} ${order.paymentDetails.paidAt.toLocaleTimeString('id-ID')}`;
+        const paidDate = new Date(order.paymentDetails.paidAt);
+        paymentDetails += `\nTanggal: ${paidDate.toLocaleDateString('id-ID')} ${paidDate.toLocaleTimeString('id-ID')}`;
       }
     }
     
     // Format pesan detail pesanan
     const detailMessage = 
-      `📋 *Detail Pesanan #${order._id.toString().slice(-6).toUpperCase()}*\n\n` +
+      `📋 *Detail Pesanan #${order.id.toString().padStart(6, '0').toUpperCase()}*\n\n` +
       `🔹 Tipe: ${order.orderType}\n` +
       `🔹 Layanan: ${order.serviceName || order.domainName || 'N/A'}\n` +
       `🔹 Status: ${statusText}\n` +
@@ -362,7 +357,7 @@ orderListScene.action(/order_detail_(.+)/, async (ctx) => {
       `🔹 Periode Langganan: ${order.billingCycle === 'monthly' ? 'Bulanan' : order.billingCycle === 'quarterly' ? '3 Bulan' : 'Tahunan'}\n` +
       `🔹 Tanggal Mulai: ${startDate}\n` +
       `🔹 Tanggal Berakhir: ${endDate}\n` +
-      `🔹 Total: Rp ${order.amount.toLocaleString('id-ID')}\n` +
+      `🔹 Total: Rp ${parseFloat(order.amount).toLocaleString('id-ID')}\n` +
       `🔹 Metode Pembayaran: ${paymentMethodText}\n` +
       `${paymentDetails}` +
       `${serverDetails}`;
@@ -429,14 +424,8 @@ orderPaymentConfirmScene.enter(async (ctx) => {
       return ctx.scene.enter('order-list');
     }
     
-    // Validasi ObjectId
-    if (!mongoose.Types.ObjectId.isValid(orderId)) {
-      await ctx.reply('ID pesanan tidak valid');
-      return ctx.scene.enter('order-list');
-    }
-    
     // Ambil detail pesanan
-    const order = await Order.findById(orderId);
+    const order = await Order.findByPk(orderId);
     
     if (!order) {
       await ctx.reply('Pesanan tidak ditemukan');
@@ -451,8 +440,8 @@ orderPaymentConfirmScene.enter(async (ctx) => {
     
     await ctx.reply(
       `💳 *Konfirmasi Pembayaran*\n\n` +
-      `ID Pesanan: #${order._id.toString().slice(-6).toUpperCase()}\n` +
-      `Total: Rp ${order.amount.toLocaleString('id-ID')}\n\n` +
+      `ID Pesanan: #${order.id.toString().padStart(6, '0').toUpperCase()}\n` +
+      `Total: Rp ${parseFloat(order.amount).toLocaleString('id-ID')}\n\n` +
       `Silakan kirimkan bukti pembayaran (screenshot/foto) untuk kami verifikasi:`,
       { parse_mode: 'Markdown' }
     );
@@ -473,7 +462,7 @@ orderPaymentConfirmScene.on('photo', async (ctx) => {
     const fileId = photo[photo.length - 1].file_id;
     
     // Update order dengan bukti pembayaran
-    const order = await Order.findById(orderId);
+    const order = await Order.findByPk(orderId);
     
     if (!order) {
       await ctx.reply('Pesanan tidak ditemukan');
@@ -492,7 +481,7 @@ orderPaymentConfirmScene.on('photo', async (ctx) => {
     
     await ctx.reply(
       `✅ *Bukti Pembayaran Diterima*\n\n` +
-      `Terima kasih telah mengirimkan bukti pembayaran untuk pesanan #${order._id.toString().slice(-6).toUpperCase()}.\n\n` +
+      `Terima kasih telah mengirimkan bukti pembayaran untuk pesanan #${order.id.toString().padStart(6, '0').toUpperCase()}.\n\n` +
       `Tim kami akan memverifikasi pembayaran Anda dan memproses pesanan sesegera mungkin. Anda akan mendapatkan notifikasi ketika layanan Anda sudah aktif.`,
       { parse_mode: 'Markdown' }
     );
@@ -513,7 +502,7 @@ orderPaymentConfirmScene.on('document', async (ctx) => {
     const fileId = ctx.message.document.file_id;
     
     // Update order dengan bukti pembayaran
-    const order = await Order.findById(orderId);
+    const order = await Order.findByPk(orderId);
     
     if (!order) {
       await ctx.reply('Pesanan tidak ditemukan');
@@ -532,7 +521,7 @@ orderPaymentConfirmScene.on('document', async (ctx) => {
     
     await ctx.reply(
       `✅ *Bukti Pembayaran Diterima*\n\n` +
-      `Terima kasih telah mengirimkan bukti pembayaran untuk pesanan #${order._id.toString().slice(-6).toUpperCase()}.\n\n` +
+      `Terima kasih telah mengirimkan bukti pembayaran untuk pesanan #${order.id.toString().padStart(6, '0').toUpperCase()}.\n\n` +
       `Tim kami akan memverifikasi pembayaran Anda dan memproses pesanan sesegera mungkin. Anda akan mendapatkan notifikasi ketika layanan Anda sudah aktif.`,
       { parse_mode: 'Markdown' }
     );
